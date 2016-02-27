@@ -40,7 +40,7 @@ namespace dz_2
     {
         public static Boolean IsEndOfPacket(string s)
         {
-            if (s.Contains("=\\r\\n"))
+            if (s.Contains("= 0"))
             {
                 return true;
             }
@@ -65,8 +65,13 @@ namespace dz_2
             String buf = "";
 
             List<IPEndPoint> ips = new List<IPEndPoint>();
-            ips.Add(new IPEndPoint(IPAddress.Parse("192.168.1.230"), 3228));
-            ips.Add(new IPEndPoint(IPAddress.Parse("192.168.1.172"), 3228));
+            ips.Add(new IPEndPoint(IPAddress.Parse("10.254.6.110"), 3228));
+            ips.Add(new IPEndPoint(IPAddress.Parse("10.254.31.122"), 3228));
+            ips.Add(new IPEndPoint(IPAddress.Parse("10.254.22.25"), 3228));
+            //ips.Add(new IPEndPoint(IPAddress.Parse("10.254.27.40"), 3228)); //itme
+            ips.Add(new IPEndPoint(IPAddress.Parse("10.254.7.63"), 3228));
+            ips.Add(new IPEndPoint(IPAddress.Parse("10.254.19.252"), 3228));
+            ips.Add(new IPEndPoint(IPAddress.Parse("10.254.23.43"), 3228)); //NS
 
             for (;;)
             {
@@ -130,8 +135,8 @@ namespace dz_2
                             {
                                 try
                                 {
-                                    double arg1 = Convert.ToDouble(strings[0]);
-                                    double arg2 = Convert.ToDouble(formath[1]);
+                                    double arg1 = Convert.ToDouble(strings[0].Replace(".", ","));
+                                    double arg2 = Convert.ToDouble(formath[1].Replace(".", ","));
 
                                     double res = arg1 - arg2;
 
@@ -143,9 +148,12 @@ namespace dz_2
                                     {
                                         tosend += str;
                                         if (str.Length > 0)
-                                            tosend += "\\r\\n";
+                                            tosend += "\r\n";
                                     }
                                     buf = tosend;
+
+
+                                    buf = buf.Replace(",", ".");
                                 }
                                 catch
                                 {
@@ -211,4 +219,3 @@ namespace dz_2
         }
     }
 }
-
