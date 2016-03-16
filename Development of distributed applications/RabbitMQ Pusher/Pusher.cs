@@ -3,7 +3,7 @@ using RabbitMQ.Client;
 using System.Web.Script.Serialization;
 using System;
 
-// You need to add this reference: System.Web.Extensions
+// You need to add this references: System.Web.Extensions, RabbitMQ.Client
 namespace RabbitMQPusher
 {
     class Program
