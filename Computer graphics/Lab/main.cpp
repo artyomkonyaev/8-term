@@ -1,10 +1,25 @@
-// guro3d.cpp : Defines the entry point for the application.
+// fong3d.cpp : Defines the entry point for the application.
 //
 #include "stdafx.h"
-#include "guro3d.h"
+#include "Lab.h"
 #include <cmath>
 
 #define MAX_LOADSTRING 100
+
+#define ID_FILE_EXIT 9001
+#define ID_STUFF_GO  9002
+#define ID_ROTATE    9003
+#define ID_ROTATE_X  9004
+#define ID_ROTATE_Y  9005
+#define ID_MOVE      9006
+#define ID_MOVE_X    9007
+#define ID_MOVE_Y    9008
+#define ID_REFLECT   9009
+#define ID_REFLECT_X 9010
+#define ID_REFLECT_Y 9011
+#define ID_RESIZE    9012
+#define ID_RESET     9013
+
 
 // Global Variables:
 HINSTANCE hInst;								// current instance
@@ -31,7 +46,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 
 	// Initialize global strings
 	LoadString(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
-	LoadString(hInstance, IDC_GURO3D, szWindowClass, MAX_LOADSTRING);
+	LoadString(hInstance, IDC_LAB, szWindowClass, MAX_LOADSTRING);
 	MyRegisterClass(hInstance);
 
 	// Perform application initialization:
@@ -40,7 +55,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 		return FALSE;
 	}
 
-	hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_GURO3D));
+	hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_LAB));
 
 	// Main message loop:
 	while (GetMessage(&msg, NULL, 0, 0))
@@ -51,6 +66,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 			DispatchMessage(&msg);
 		}
 	}
+
 
 	return (int)msg.wParam;
 }
@@ -66,15 +82,18 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	wcex.cbClsExtra = 0;
 	wcex.cbWndExtra = 0;
 	wcex.hInstance = hInstance;
-	wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_GURO3D));
+	wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDC_LAB));
 	wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-	wcex.lpszMenuName = MAKEINTRESOURCE(IDC_GURO3D);
+	wcex.lpszMenuName = MAKEINTRESOURCE(IDC_LAB);
 	wcex.lpszClassName = szWindowClass;
 	wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
 	return RegisterClassEx(&wcex);
 }
+
+
+
 
 
 
@@ -86,14 +105,11 @@ DWORD * pixels = NULL;
 // определяем типы данных для векторов и вершин
 struct vector3d { double x, y, z; };
 typedef struct vector3d VECTOR3D;
-
 struct vertex3d { VECTOR3D point; VECTOR3D normal; };
 typedef struct vertex3d VERTEX3D;
-
 struct vector2d { int x, y; };
 typedef struct vector2d VECTOR2D;
-
-struct vertex2d { VECTOR2D point; double light; };
+struct vertex2d { VECTOR2D point; VECTOR3D normal; };
 typedef struct vertex2d VERTEX2D;
 
 #define points_count  8	// точек
@@ -101,11 +117,14 @@ typedef struct vertex2d VERTEX2D;
 #define fvertex  4		// вершин грани
 
 // матрица точек для инициализации точек фигуры
-double cube_template[points_count][3] = 
-{
-	{ -25, -25, -25 }, { 25, -25, -25 }, { 25, 25, -25 }, { -25, 25, -25 },
+double cube_template[points_count][3] = {
+	{ -20, -25, -25 }, { 10, -25, -25 }, { 10, 25, -25 }, { -20, 25, -25 },
 	{ -25, -25, 25 }, { 25, -25, 25 }, { 25, 25, 25 }, { -25, 25, 25 }
 };
+
+//int colors[faces][3] = { { 41, 247, 42 }, { 60, 188, 128 }, { 96, 23, 14 }, { 42, 84, 159 }, { 207, 164, 159 }, { 254, 248, 169 } };
+
+double cubeMultiplier = 2;
 
 VERTEX3D points3d[points_count]; // точки куба 3D
 VERTEX2D points2d[points_count]; // точки куба 2D
@@ -116,19 +135,9 @@ int center[2]; // координаты центра экрана
 double ctn = cos(atan(2.0)) / 2, stn = sin(atan(2.0)) / 2;
 
 // нумеруем точки составляющие грань из массивов cube_template, points3d и points2d
-int grani[faces][fvertex] = 
-{
-	{ 0, 4, 5, 1 },
-	{ 0, 1, 2, 3 },
-	{ 0, 3, 7, 4 },
-	{ 5, 4, 7, 6 }, 
-	{ 1, 5, 6, 2 },
-	{ 2, 6, 7, 3 } 
-};
-
+int grani[faces][fvertex] = { { 0, 4, 5, 1 }, { 0, 1, 2, 3 }, { 0, 3, 7, 4 }, { 5, 4, 7, 6 }, { 1, 5, 6, 2 }, { 2, 6, 7, 3 } };
 // цвета граней
-int colors[faces][3] = 
-{
+int colors[faces][3] = {
 	{ 0, 100, 255 }, { 100, 255, 0 }, { 255, 100, 0 },
 	{ 0, 255, 255 }, { 255, 0, 255 }, { 255, 255, 0 }
 };
@@ -141,46 +150,154 @@ RECT rect;
 int a = 0;
 
 // вращение
-void rotate_y(double alpha)
+void RotateY(double alpha, int rotateX, int rotateY)
 {
-	double x, alsin = sin(alpha), alcos = cos(alpha);
+	double x, sinA = sin(alpha), cosA = cos(alpha);
+	//
 	for (int i = 0; i < points_count; i++)
 	{
-		points3d[i].point.x -= center[0], points3d[i].point.y -= center[1];
-		x = points3d[i].point.x * alcos - points3d[i].point.z * alsin;
-		points3d[i].point.z = points3d[i].point.x * alsin + points3d[i].point.z * alcos;
+		points3d[i].point.x -= rotateX;
+		points3d[i].point.y -= rotateY;
+		//
+		x = points3d[i].point.x * cosA - points3d[i].point.z * sinA;
+		points3d[i].point.z = points3d[i].point.x * sinA + points3d[i].point.z * cosA;
 		points3d[i].point.x = x;
-		points3d[i].point.x += center[0], points3d[i].point.y += center[1];
-
-		x = points3d[i].normal.x * alcos - points3d[i].normal.z * alsin;
-		points3d[i].normal.z = points3d[i].normal.x * alsin + points3d[i].normal.z * alcos;
+		//
+		points3d[i].point.x += rotateX;
+		points3d[i].point.y += rotateY;
+		//
+		x = points3d[i].normal.x * cosA - points3d[i].normal.z * sinA;
+		points3d[i].normal.z = points3d[i].normal.x * sinA + points3d[i].normal.z * cosA;
 		points3d[i].normal.x = x;
 	}
 }
 
-void rotate_x(double alpha)
+void RotateX(double alpha, int rotateX, int rotateY)
 {
-	double y, alsin = sin(alpha), alcos = cos(alpha);
+	double y, sinA = sin(alpha), cosA = cos(alpha);
+	//
 	for (int i = 0; i < points_count; i++)
 	{
-		points3d[i].point.x -= center[0], points3d[i].point.y -= center[1];
-		y = points3d[i].point.y * alcos + points3d[i].point.z * alsin;
-		points3d[i].point.z = points3d[i].point.z * alcos - points3d[i].point.y * alsin;
+		points3d[i].point.x -= rotateX;
+		points3d[i].point.y -= rotateY;
+		//
+		y = points3d[i].point.y * cosA + points3d[i].point.z * sinA;
+		points3d[i].point.z = points3d[i].point.z * cosA - points3d[i].point.y * sinA;
 		points3d[i].point.y = y;
-		points3d[i].point.x += center[0], points3d[i].point.y += center[1];
-
-		y = points3d[i].normal.y * alcos + points3d[i].normal.z * alsin;
-		points3d[i].normal.z = points3d[i].normal.z * alcos - points3d[i].normal.y * alsin;
+		//
+		points3d[i].point.x += rotateX;
+		points3d[i].point.y += rotateY;
+		//
+		y = points3d[i].normal.y * cosA + points3d[i].normal.z * sinA;
+		points3d[i].normal.z = points3d[i].normal.z * cosA - points3d[i].normal.y * sinA;
 		points3d[i].normal.y = y;
+	}
+}
+
+void Resize(double n)
+{
+	for (int i = 0; i < points_count; i++)
+	{
+		points3d[i].point.x -= center[0];
+		points3d[i].point.y -= center[1];
+		
+		points3d[i].point.x *= n;
+		points3d[i].point.y *= n;
+		points3d[i].point.z *= n;
+		
+		points3d[i].point.x += center[0];
+		points3d[i].point.y += center[1];
+	}
+}
+
+void ReflectX()
+{
+	for (int i = 0; i < points_count; i++)
+	{
+		points3d[i].point.x -= center[0];
+		points3d[i].point.x *= -1;
+		points3d[i].point.x += center[0];
+	}
+}
+
+void ReflectY()
+{
+	for (int i = 0; i < points_count; i++)
+	{
+		points3d[i].point.y -= center[1];
+		points3d[i].point.y *= -1;
+		points3d[i].point.y += center[1];
+	}
+}
+void swap(int *x, int *y)
+{
+	*x += *y;
+	*y = *x - *y;
+	*x -= *y;
+}
+void swap(double *x, double *y)
+{
+	*x += *y;
+	*y = *x - *y;
+	*x -= *y;
+}
+void swap(VECTOR3D *x, VECTOR3D *y) {
+	VECTOR3D tmp;
+	memcpy(&tmp, x, sizeof(VECTOR3D));
+	memcpy(x, y, sizeof(VECTOR3D));
+	memcpy(y, &tmp, sizeof(VECTOR3D));
+}
+
+void Reset()
+{
+	for (int i = 0; i < points_count; i++)
+	{
+		points3d[i].point.x = cube_template[i][0] * cubeMultiplier;
+		points3d[i].point.y = cube_template[i][1] * cubeMultiplier;
+		points3d[i].point.z = cube_template[i][2] * cubeMultiplier;
+		
+		//
+		points3d[i].point.x += center[0];
+		points3d[i].point.y += center[1];
+	}
+}
+
+void ReflectXY()
+{
+	//TODO: & or not?
+	for (int i = 0; i < points_count; i++)
+	{
+		//swap(points3d[i].point.x, points3d[i].point.y);
+
+		double temp = points3d[i].point.x;
+		points3d[i].point.x = points3d[i].point.y;
+		points3d[i].point.y = temp;
 
 	}
 }
 
+void MoveX(double offset)
+{
+	for (int i = 0; i < points_count; i++)
+	{
+		points3d[i].point.x += offset;
+	}
+}
+
+void MoveY(double offset)
+{
+	for (int i = 0; i < points_count; i++)
+	{
+		points3d[i].point.y -= offset;
+	}
+}
+
 // отсечение невидимых граней
-int visible(int num) // roberts
+int IsVisible(int num) // roberts
 {
 	int j;
 	double sum = 0;
+
 	for (int i = 0; i < fvertex; i++)
 	{
 		j = i == fvertex - 1 ? 0 : i + 1;
@@ -199,13 +316,13 @@ void project()
 		//		x' = x + z*(1/2)*cos(atan(2)); y' = y + z*(1/2)*sin(atan(2));
 		points2d[i].point.x = (long)floor(points3d[i].point.x - points3d[i].point.z * ctn);
 		points2d[i].point.y = (long)floor(points3d[i].point.y - points3d[i].point.z * stn);
+		points2d[i].normal = points3d[i].normal;
 	}
 }
 
-void swap(int *x, int *y) { *x += *y; *y = *x - *y; *x -= *y; }
-void swap(double *x, double *y) { *x += *y; *y = *x - *y; *x -= *y; }
 
-//нормирование векторов ------------------------------------------------------
+
+//нормализация векторов ------------------------------------------------------
 void normalize(VECTOR3D * v)
 {
 	double vec_length = sqrt(v->x * v->x + v->y * v->y + v->z * v->z);
@@ -224,11 +341,15 @@ VECTOR3D normalize_tmp(VECTOR3D * v)
 
 	if (vec_length != 0)
 	{
-		tmp.x /= vec_length, tmp.y /= vec_length, tmp.z /= vec_length;
+		tmp.x /= vec_length;
+		tmp.y /= vec_length;
+		tmp.z /= vec_length;
 	}
 	else
 	{
-		tmp.x = 0, tmp.y = 0, tmp.z = 0;
+		tmp.x = 0;
+		tmp.y = 0;
+		tmp.z = 0;
 	}
 
 	return tmp;
@@ -238,42 +359,26 @@ double vector_size(VECTOR3D * v)
 {
 	return sqrt(v->x * v->x + v->y * v->y + v->z * v->z);
 }
+double vector_size(VECTOR2D * v)
+{
+	return sqrt(double(v->x * v->x + v->y * v->y));
+}
 
 // ***
 // **
 // * вычисление интенсивности освещения в вершине p_num грани gr_num
-double amp = 0.9; // яркость источника (0-1)
-double ambient = 0.8;//рассеянный свет (0-1)
-double K = 0.1; // постоянная (изменение интенсивности с расстоянием от источника (0-1))
-double ks = 0.5;
+double amp = 0.5; // яркость источника (0-1)
+double ambient = 0.5;//рассеянный свет (0-1)
+double light[3] = { -0.5, -0.5, -0.5 }; // координаты источника света (x,y,z : 0-1)
 
-double light_intense(int p_num)
+double light_intense(VECTOR3D normal)
 {
-	VECTOR3D light, s, light_vect, point_vect, normal;
-	light.x = 0, light.y = 0, light.z = 1; // координаты источника света (x,y,z : 0-1)
-	s.x = 0, s.y = 0, s.z = 0.1; // точка наблюдения
 	int n = 3;
 
-	// координаты вершины, для которой вычисляется освещенность
-	point_vect = points3d[p_num].point;
-	normalize(&point_vect);
-
-	// вектор от вершины на источник света
-	light_vect.x = (light.x - point_vect.x);
-	light_vect.y = (light.y - point_vect.y);
-	light_vect.z = -(light.z - point_vect.z);
-	normalize(&light_vect);
-
-	normal = points3d[p_num].normal;
-
 	//т.к. вектора нормализованы, то сумму делить не нужно
-	double cos_fi = light_vect.x * normal.x + light_vect.y * normal.y + light_vect.z * normal.z;
-	// между отраженным лучом и вектором наблюдения
-	double cos_alpha = -light_vect.x * s.x - light_vect.y * s.y - -light_vect.z * s.z;
+	double cos_fi = light[0] * normal.x + light[1] * normal.y + light[2] * normal.z;
 
-	double d = vector_size(&light_vect);
-
-	double val = ambient + (amp * cos_fi + ks * pow(cos_alpha, n)) / (d + K);
+	double val = ambient + amp * cos_fi;
 
 	return val < 0 ? 0 : min(val, 1);
 }
@@ -288,27 +393,38 @@ int comp(const void *A, const void *B)
 void make_line(VERTEX2D p1, VERTEX2D p2)
 {
 	int dx = abs(p2.point.x - p1.point.x), dy = abs(p2.point.y - p1.point.y);
+	VECTOR3D tmp_norm, n1 = p1.normal, n2 = p2.normal;
 	int sx = p1.point.x < p2.point.x ? 1 : -1, sy = p1.point.y < p2.point.y ? 1 : -1;
-	double t, len = sqrt(double(dx*dx + dy*dy)), dxc, dyc;
+
+	double t;
+
+	double len = sqrt(double(dx*dx + dy*dy));
+	
+	double dxc, dyc;
+
 	int x = p1.point.x;
 	int y = p1.point.y;
-	
-	int prev = -INT_MAX;
+	int prev = -1;
+
 	int error = dx - dy, err;
 
 	for (;;) {
-		// Вычисляем интенсивность в точке линии
-		dxc = p1.point.x - x;
-		dyc = p1.point.y - y;
-
-		t = sqrt(dxc*dxc + dyc*dyc) / len;
+		// Вычисляем нормаль в точке линии
 		err = error << 1;
 
 		if (y != prev)
 		{
+			dxc = p1.point.x - x, dyc = p1.point.y - y;
+			t = sqrt(dxc*dxc + dyc*dyc) / len;
+
+			tmp_norm.x = (1 - t)*n1.x + t*n2.x;
+			tmp_norm.y = (1 - t)*n1.y + t*n2.y;
+			tmp_norm.z = (1 - t)*n1.z + t*n2.z;
+
 			plist[count].point.x = x;
 			plist[count].point.y = y;
-			plist[count].light = (1 - t) * p1.light + t * p2.light;
+			plist[count].normal = tmp_norm;
+
 			count++;
 		}
 
@@ -320,15 +436,26 @@ void make_line(VERTEX2D p1, VERTEX2D p2)
 
 		if (err > -dy)
 		{
-			error -= dy, x += sx;
+			error -= dy;
+			x += sx;
 		}
-
 		if (err < dx)
 		{
+			dxc = p1.point.x - x;
+			dyc = p1.point.y - y;
+
+			t = sqrt(dxc*dxc + dyc*dyc) / len;
+
+			tmp_norm.x = (1 - t)*n1.x + t*n2.x;
+			tmp_norm.y = (1 - t)*n1.y + t*n2.y;
+			tmp_norm.z = (1 - t)*n1.z + t*n2.z;
+
 			plist[count].point.x = x;
 			plist[count].point.y = y;
-			plist[count].light = (1 - t) * p1.light + t * p2.light;
+			plist[count].normal = tmp_norm;
+
 			count++;
+
 			error += dx, y += sy;
 		}
 	}
@@ -361,14 +488,25 @@ void line(DWORD* pixels, int x1, int y1, int x2, int y2, COLORREF color)
 
 		int error2 = error * 2;
 
-		if (error2 > -deltaY) { error -= deltaY; x1 += signX; }
-		if (error2 < deltaX) { error += deltaX; y1 += signY; }
+		if (error2 > -deltaY)
+		{
+			error -= deltaY;
+			x1 += signX;
+		}
+		if (error2 < deltaX)
+		{
+			error += deltaX;
+			y1 += signY;
+		}
 	}
 }
 
 void circle(DWORD* pixels, int x0, int y0, int radius, COLORREF color)
 {
-	int x = 0;  int y = radius;  int delta = 2 - 2 * radius; int error = 0;
+	int x = 0;
+	int y = radius;
+	int delta = 2 - 2 * radius;
+	int error = 0;
 
 	while (y >= 0)
 	{
@@ -381,8 +519,9 @@ void circle(DWORD* pixels, int x0, int y0, int radius, COLORREF color)
 
 		if (delta < 0 && error <= 0)
 		{
-			++x; delta += 2 * x + 1;
-
+			++x;
+			delta += 2 * x + 1;
+			
 			continue;
 		}
 
@@ -390,19 +529,22 @@ void circle(DWORD* pixels, int x0, int y0, int radius, COLORREF color)
 
 		if (delta > 0 && error > 0)
 		{
-			--y; delta += 1 - 2 * y;
-			
+			--y;
+			delta += 1 - 2 * y;
 			continue;
 		}
 
 		++x;
-		delta += 2 * (x - y); --y;
+		delta += 2 * (x - y);
+		--y;
 	}
 }
 
-void fillrect(DWORD* pixels, int x1, int y1, int x2, int y2, COLORREF color)
+void FillRect(DWORD* pixels, int x1, int y1, int x2, int y2, COLORREF color)
 {
-	int dx = abs(x2 - x1) + 1, dy = abs(y2 - y1) + 1, i;
+	int dx = abs(x2 - x1) + 1;
+	int dy = abs(y2 - y1) + 1;
+	int i;
 
 	if (min(x1, x2) + dx >= rect.right)
 	{
@@ -417,6 +559,7 @@ void fillrect(DWORD* pixels, int x1, int y1, int x2, int y2, COLORREF color)
 	color = GetRValue(color) << 16 | (WORD)GetGValue(color) << 8 | GetBValue(color);
 
 	DWORD * line = new DWORD[dx];
+
 	for (i = 0; i < dx; i++)
 	{
 		line[i] = color;
@@ -436,11 +579,11 @@ light	- интенсивности отраженного света в верш
 count	- количество точек
 gr_num	- номер грани, для закрашивания цветом из массива цветов
 */
-void guro_fill(PDWORD pixels, int gr_num, int pcount)
+void fong_fill(PDWORD pixels, int gr_num, int pcount)
 {
 	// будем использовать массив пикселей для построения грани
-	int i, next, x, y, x1, x2;
-	double I, I2, incr;
+	int i, next, x, y, x1, x2, dx;
+	double I, dnx, dny, dnz;
 
 	count = 0;
 
@@ -459,65 +602,53 @@ void guro_fill(PDWORD pixels, int gr_num, int pcount)
 	for (i = 0; i < count - 1; i++)
 	{
 		y = plist[i].point.y;
-
-		if (y != plist[i + 1].point.y)
-		{
-			continue;
-		}
-
+		if (y != plist[i + 1].point.y) continue;
 		x1 = plist[i].point.x, x2 = plist[i + 1].point.x;
-
-		I = plist[i].light, I2 = plist[i + 1].light;
-
+		VECTOR3D n1 = plist[i].normal, n2 = plist[i + 1].normal, tmp_norm;
 		//рисуем горизонтальную линию
-		if (x1 > x2)
-		{
-			swap(&x1, &x2);
-			swap(&I, &I2);
-		}
-
-		incr = (I2 - I) / (x2 - x1);
-
+		if (x1 > x2) { swap(&x1, &x2); swap(&n1, &n2); }
+		dx = x2 - x1;
+		dnx = (n2.x - n1.x) / dx;
+		dny = (n2.y - n1.y) / dx;
+		dnz = (n2.z - n1.z) / dx;
+		tmp_norm = n1;
 		for (x = x1; x <= x2; x++)
 		{
-			//поставить точку
-			SetPoint(pixels, x, y, RGB(colors[gr_num][0] * (I), colors[gr_num][1] * (I), colors[gr_num][2] * (I)));
-			//			SetPoint(pixels,x,y,RGB(0*(I),255*(I),0*(I)));
-			I += incr; // интерполируем интенсивность
+			I = light_intense(tmp_norm);
+			tmp_norm.x += dnx;
+			tmp_norm.y += dny;
+			tmp_norm.z += dnz;
+			
+			SetPoint(pixels,x,y,RGB(colors[gr_num][0]*(I),colors[gr_num][1]*(I),colors[gr_num][2]*(I)));
+			//SetPoint(pixels, x, y, RGB(0 * (I), 255 * (I), 0 * (I)));
+			//SetPoint(pixels, x, y, RGB(colors[gr_num][0] * (I), colors[gr_num][1] * (I), colors[gr_num][2](I)));
 		}
 	}
 }
 
 
-void show_cube(PDWORD pixels, int width, int height)
+void ShowCube(PDWORD pixels, int width, int height)
 {
-	//вычислим интенсивность во всех точках
-	for (int j = 0; j < points_count; j++)
-	{
-		points2d[j].light = light_intense(j);
-	}
-
 	// закрашиваем каждую грань
 	for (int i = 0; i < faces; i++)
 	{
-		if (visible(i))
+		if (IsVisible(i))
 		{
-			guro_fill(pixels, i, fvertex); // только для видимых граней
-
-			// отобразим нормали (для проверки)
-			for (int k = 0; k < fvertex; k++)
-			{
-				VECTOR3D normal = points3d[grani[i][k]].normal;
-				VECTOR3D norm_p;
-
-				norm_p.x = points3d[grani[i][k]].point.x + 100 * normal.x;
-				norm_p.y = points3d[grani[i][k]].point.y + 100 * normal.y;
-				norm_p.z = points3d[grani[i][k]].point.z + 100 * normal.z;
-
-				line(pixels, points3d[grani[i][k]].point.x - points3d[grani[i][k]].point.z*ctn, points3d[grani[i][k]].point.y - points3d[grani[i][k]].point.z*stn, norm_p.x - norm_p.z*ctn, norm_p.y - norm_p.z*stn, RGB(0, 255, 0));
-			}
+			fong_fill(pixels, i, fvertex); // только для видимых граней
 		}
 	}
+
+	// отобразим нормали (для проверки)
+	/*for(int i = 0; i < points_count; i++)
+	{
+		VECTOR3D normal = normalize_tmp(&points3d[i].normal);
+		VECTOR3D norm_p;
+		norm_p.x = points3d[i].point.x + 100 * normal.x;
+		norm_p.y = points3d[i].point.y + 100 * normal.y;
+		norm_p.z = points3d[i].point.z + 100 * normal.z;
+		line(pixels,points3d[i].point.x - points3d[i].point.z*ctn,points3d[i].point.y - points3d[i].point.z*stn, norm_p.x - norm_p.z*ctn,norm_p.y - norm_p.z*stn, RGB(0,255,0));
+	}*/
+	
 }
 
 VECTOR3D dec_vect(VECTOR3D t1, VECTOR3D t2)
@@ -530,6 +661,8 @@ VECTOR3D dec_vect(VECTOR3D t1, VECTOR3D t2)
 
 	return summ;
 }
+
+enum { ID_LABEL = 1, ID_IMAGE, ID_EDIT, ID_LIST, ID_BUTTON=228, ID_COMBO, ID_BUTTON2 };
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
@@ -552,16 +685,16 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	for (int i = 0; i < points_count; i++)
 	{
-		points3d[i].point.x = cube_template[i][0] * 6;
-		points3d[i].point.y = cube_template[i][1] * 6;
-		points3d[i].point.z = cube_template[i][2] * 6;
+		points3d[i].point.x = cube_template[i][0] *cubeMultiplier;
+		points3d[i].point.y = cube_template[i][1] *cubeMultiplier;
+		points3d[i].point.z = cube_template[i][2] *cubeMultiplier;
+
 		points3d[i].point.x += center[0];
 		points3d[i].point.y += center[1];
 	}
 
 	//вычислим нормали во всех вершинах
 	VECTOR3D v1, v2;
-
 	for (int j = 0; j < points_count; j++)
 	{
 		ZeroMemory(&points3d[j].normal, sizeof VECTOR3D);
@@ -573,14 +706,56 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 				{
 					v1 = dec_vect(points3d[grani[i][0]].point, points3d[grani[i][1]].point);
 					v2 = dec_vect(points3d[grani[i][2]].point, points3d[grani[i][1]].point);
+
 					points3d[j].normal.x += v1.y * v2.z - v1.z * v2.y;
 					points3d[j].normal.y += v1.z * v2.x - v1.x * v2.z;
 					points3d[j].normal.z += v1.x * v2.y - v1.y * v2.x;
 				}
 		}
-
-		normalize(&points3d[j].normal);
+		normalize(&points3d[j].normal); // сразу нормализуем
 	}
+
+
+	//
+	/*hwndButton = CreateWindow(
+		L"BUTTON",  // Predefined class; Unicode assumed 
+		L"OK",      // Button text 
+		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // Styles 
+		10,         // x position 
+		10,         // y position 
+		200,        // Button width
+		100,        // Button height
+		hWnd,     // Parent window
+		(HMENU)ID_BUTTON, 
+		(HINSTANCE)GetWindowLong(hWnd, GWL_HINSTANCE),
+		NULL);      // Pointer not needed.
+		*/
+	//HWND hwndButton = CreateWindow(L"Button", L"Calculate",
+	//BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 140, 70, 100, 25, hWnd, (HMENU)ID_BUTTON, (HINSTANCE)GetWindowLong(hWnd, GWL_HINSTANCE), 0);
+	//
+
+	HMENU hMenu = CreateMenu();
+
+	// Rotate
+	HMENU hSubMenu = CreatePopupMenu();
+	AppendMenu(hSubMenu, MF_STRING, ID_ROTATE_X, L"RotateX");
+	AppendMenu(hSubMenu, MF_STRING, ID_ROTATE_Y, L"RotateY");
+	AppendMenu(hMenu, MF_STRING | MF_POPUP, (UINT)hSubMenu, L"Rotate");
+
+	
+	// Move
+	hSubMenu = CreatePopupMenu();
+	AppendMenu(hSubMenu, MF_STRING, ID_MOVE_X, L"MoveX");
+	AppendMenu(hSubMenu, MF_STRING, ID_MOVE_Y, L"MoveY");
+	AppendMenu(hMenu, MF_STRING | MF_POPUP, (UINT)hSubMenu, L"Move");
+
+	// Move
+	hSubMenu = CreatePopupMenu();
+	AppendMenu(hSubMenu, MF_STRING, ID_REFLECT_X, L"ReflectX");
+	AppendMenu(hSubMenu, MF_STRING, ID_REFLECT_Y, L"ReflectY");
+	AppendMenu(hMenu, MF_STRING | MF_POPUP, (UINT)hSubMenu, L"Reflect");
+
+	SetMenu(hWnd, hMenu);
 
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
@@ -601,13 +776,17 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 //
 WPARAM key = 0;
 
+int clickX = 0;
+int clickY = 0;
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
 	PAINTSTRUCT ps;
 	HDC hdc;
 	double alpha = 0.025;
-
+	double offset = 10;
+	
 	switch (message)
 	{
 	case WM_COMMAND:
@@ -622,26 +801,75 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case IDM_EXIT:
 			DestroyWindow(hWnd);
 			break;
+		case ID_FILE_EXIT:
+
+			while (FALSE) {}
+
+			break;
+
+		case ID_MOVE_X:
+			MoveX(offset);
+			break;
+
+		case ID_MOVE_Y:
+			MoveY(offset);
+			break;
+		case ID_ROTATE_X:
+			if (clickY && clickX)
+			{
+				RotateX(alpha, clickX, clickY);
+			}
+			else
+			{
+				RotateX(alpha, center[0], center[1]);
+			}
+
+			break;
+		case ID_ROTATE_Y:
+			if (clickY && clickX)
+			{
+				RotateY(alpha, clickX, clickY);
+			}
+			else
+			{
+				RotateY(alpha, center[0], center[1]);
+			}
+
+			break;
+
+		case ID_REFLECT_X:
+			ReflectX();
+			break;
+		case ID_REFLECT_Y:
+			ReflectY();
+			break;
+
 		default:
 			return DefWindowProc(hWnd, message, wParam, lParam);
 		}
 		break;
+
+	
 	case WM_CREATE:
+	{
 		// создание буфера для построения изображения
 		// ----------------------------------------------------------------------
 		ZeroMemory(&bmi, sizeof(BITMAPINFO));
-
 		bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 		bmi.bmiHeader.biWidth = rect.right;
 		bmi.bmiHeader.biHeight = -rect.bottom;
 		bmi.bmiHeader.biPlanes = 1;
 		bmi.bmiHeader.biBitCount = 32; /* Request a 32bpp bitmap. */
 		bmi.bmiHeader.biCompression = BI_RGB;
-
 		pixels = new DWORD[rect.right * rect.bottom];
+		
 		break;
+	}
 	case WM_SIZE:
-		if (pixels) delete pixels;
+		if (pixels)
+		{
+			delete pixels;
+		}
 
 		for (int i = 0; i < 8; i++)
 		{
@@ -650,6 +878,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 
 		GetClientRect(hWnd, &rect);
+
 		center[0] = rect.right / 2;
 		center[1] = rect.bottom / 2;
 
@@ -660,78 +889,233 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 
 		pixels = new DWORD[rect.right * rect.bottom];
+
 		bmi.bmiHeader.biWidth = rect.right;
 		bmi.bmiHeader.biHeight = -rect.bottom;
+
 		break;
 	case WM_LBUTTONDOWN:
-		KillTimer(hWnd, NULL);
+	{
+		//KillTimer(hWnd, NULL);
+		clickX = LOWORD(lParam);
+		clickY = HIWORD(lParam);
+
+		while (FALSE) {}
 		break;
-	case WM_LBUTTONUP:
-		SetTimer(hWnd, NULL, 10, NULL);
+	}
+	case WM_RBUTTONDOWN:
+	{		
+		clickY = clickX = 0;
 		break;
+	}
+	case WM_KEYDOWN:
+		switch (wParam)
+		{
+		case VK_LEFT:
+			MoveX(-offset);
+			break;
+		case VK_RIGHT:
+			MoveX(offset);
+			break;
+		case VK_UP:
+			MoveY(offset);
+			break;
+		case VK_DOWN:
+			MoveY(-offset);
+			break;
+		default:
+			break;
+		}
+		break;
+
+	case WM_CHAR:
+		switch (wParam)
+		{
+		// Rotate
+		case 'W':
+		case 'w':
+		case 'ц'+1104:
+		case 'Ц' + 1104:
+			if (clickY && clickX)
+			{
+				RotateX(alpha, clickX, clickY);
+			}
+			else
+			{
+				RotateX(alpha, center[0], center[1]);
+			}
+			break;
+		case 'A':
+		case 'a':
+		case 'Ф' + 1104:
+		case 'ф' + 1104:
+			if (clickY && clickX)
+			{
+				RotateY(-alpha, clickX, clickY);
+			}
+			else
+			{
+				RotateY(-alpha, center[0], center[1]);
+			}
+			break;
+		case 'S':
+		case 's':
+		case 'Ы' + 1104:
+		case 'ы' + 1104:
+			if (clickY && clickX)
+			{
+				RotateX(-alpha, clickX, clickY);
+			}
+			else
+			{
+				RotateX(-alpha, center[0], center[1]);
+			}
+			break;
+		case 'D':
+		case 'd':
+		case 'В' + 1104:
+		case 'в' + 1104:
+			if (clickY && clickX)
+			{
+				RotateY(alpha, clickX, clickY);
+			}
+			else
+			{
+				RotateY(alpha, center[0], center[1]);
+			}
+			break;
+
+		// Reflection
+		case 'X':
+		case 'x':
+		case 'Ч' + 1104:
+		case 'ч' + 1104:
+			ReflectX();
+			break;
+		case 'Z':
+		case 'z':
+		case 'Я' + 1104:
+		case 'я' + 1104:
+			ReflectY();
+			break;
+		case 'C':
+		case 'c':
+		case 'С' + 1104:
+		case 'с' + 1104:
+			ReflectXY();
+			break;
+
+		// Resizing
+		case '+':
+		case '=':
+			Resize(1.5);
+			break;
+		case '-':
+			Resize(0.5);
+			break;
+
+		// Resetting
+		case 'R':
+		case 'r':
+		case 'К' + 1104:
+		case 'к' + 1104:
+			Reset();
+			break;
+		default:
+			break;
+		}
+		break;
+
 	case WM_PAINT:
+	{
 		hdc = BeginPaint(hWnd, &ps);
 
 		if (!pixels) break;
 		// ----------------------------------------------------------------------
 
 		// Здесь рисуем в массив pixels
-		fillrect(pixels, 0, 0, rect.right, rect.bottom, RGB(100, 100, 100));
+		FillRect(pixels, 0, 0, rect.right, rect.bottom, RGB(0, 0, 40));
 
 		project(); // проецирование
-		show_cube(pixels, rect.right, rect.bottom); // отображение
+		ShowCube(pixels, rect.right, rect.bottom); // отображение
 
 		//for(int i = 0; i < 20; i++) circle(pixels,center[0],center[1],300+i,RGB(200-i*5,0,0));
 
 		// ----------------------------------------------------------------------
 		// копируем массив пикселей в hdc
 		SetDIBitsToDevice(hdc, 0, 0, rect.right, rect.bottom, 0, 0, 0, rect.bottom, pixels, &bmi, DIB_RGB_COLORS);
-		//StretchDIBits(hdc, 0, 0, rect.right, rect.bottom, 0, 0, rect.right, rect.bottom, pixels, &bmi, DIB_RGB_COLORS, SRCCOPY);
 		// ----------------------------------------------------------------------
 		EndPaint(hWnd, &ps);
+
+
+		break;
+	}
+	/*case ID_BUTTON:
+
+		while (false){}
+		break;
+		*/
+	case WM_TIMER:
+		InvalidateRect(hWnd, NULL, TRUE);
+		UpdateWindow(hWnd);
 		break;
 
-	case WM_TIMER: // Make movement
+	/*case WM_TIMER: // Make movement
 		a++;
 		if (a < 100)
-			rotate_x(alpha);
+		{
+			//RotateX(alpha, center[0], center[1]);
+			ReflectXY();
+		}
 		else if (a < 200)
-			rotate_x(-alpha);
+		{
+			//RotateX(-alpha, center[0], center[1]);
+		}
 		else if (a < 300)
-			rotate_y(alpha);
+		{
+			//RotateY(alpha, center[0], center[1]);
+		}
 		else if (a < 400)
 		{
-			rotate_x(alpha);
-			rotate_y(alpha);
+			//RotateX(alpha, center[0], center[1]);
+			//RotateY(alpha, center[0], center[1]);
 		}
 		else if (a < 500)
 		{
-			rotate_x(-alpha);
-			rotate_y(-alpha);
+			//RotateX(-alpha, center[0], center[1]);
+			//RotateY(-alpha, center[0], center[1]);
 		}
 		else if (a < 600)
 		{
-			rotate_x(-alpha);
-			rotate_y(alpha);
+			//RotateX(-alpha, center[0], center[1]);
+			//RotateY(alpha, center[0], center[1]);
 		}
 		else if (a < 700)
 		{
-			rotate_x(alpha);
-			rotate_y(-alpha);
+			//RotateX(alpha, center[0], center[1]);
+			//RotateY(-alpha, center[0], center[1]);
 		}
 		else
-			rotate_y(-alpha);
+		{
+			//RotateY(-alpha, center[0], center[1]);
+		}
 		if (a>800) a = 0;
 
 		InvalidateRect(hWnd, NULL, TRUE);//FALSE);
 		UpdateWindow(hWnd);
-		break;
-
+		break;*/
+		
+	
+	
 	case WM_ERASEBKGND:
-		break;
+		break;	
 
 	case WM_DESTROY:
-		if (pixels) delete pixels;
+		if (pixels)
+		{
+			delete pixels;
+		}
+
 		PostQuitMessage(0);
 		break;
 	default:
