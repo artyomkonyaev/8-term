@@ -6,20 +6,21 @@
 
 #define MAX_LOADSTRING 100
 
-#define ID_FILE_EXIT 9001
-#define ID_STUFF_GO  9002
-#define ID_ROTATE    9003
-#define ID_ROTATE_X  9004
-#define ID_ROTATE_Y  9005
-#define ID_MOVE      9006
-#define ID_MOVE_X    9007
-#define ID_MOVE_Y    9008
-#define ID_REFLECT   9009
-#define ID_REFLECT_X 9010
-#define ID_REFLECT_Y 9011
-#define ID_RESIZE    9012
-#define ID_RESET     9013
 
+
+#define ID_ROTATE_X     9004
+#define ID_ROTATE_Y     9005
+#define ID_MOVE_X_LEFT  9006
+#define ID_MOVE_X_RIGHT 9007
+#define ID_MOVE_Y_UP    9008
+#define ID_MOVE_Y_DOWN  9009
+#define ID_REFLECT_X    9010
+#define ID_REFLECT_Y    9011
+#define ID_RESIZE       9012
+#define ID_RESET        9013
+#define IDC_MAIN_BUTTON 9014
+
+#define RUSSIAN_MAGIC_OFFSET 1104
 
 // Global Variables:
 HINSTANCE hInst;								// current instance
@@ -716,23 +717,18 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	}
 
 
-	//
-	/*hwndButton = CreateWindow(
-		L"BUTTON",  // Predefined class; Unicode assumed 
-		L"OK",      // Button text 
-		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // Styles 
-		10,         // x position 
-		10,         // y position 
-		200,        // Button width
-		100,        // Button height
-		hWnd,     // Parent window
-		(HMENU)ID_BUTTON, 
-		(HINSTANCE)GetWindowLong(hWnd, GWL_HINSTANCE),
-		NULL);      // Pointer not needed.
-		*/
-	//HWND hwndButton = CreateWindow(L"Button", L"Calculate",
-	//BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 140, 70, 100, 25, hWnd, (HMENU)ID_BUTTON, (HINSTANCE)GetWindowLong(hWnd, GWL_HINSTANCE), 0);
-	//
+	HWND hWndButton = CreateWindowEx(NULL,
+		L"BUTTON",
+		L"Reset",
+		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+		10,
+		10,
+		100,
+		24,
+		hWnd,
+		(HMENU)IDC_MAIN_BUTTON,
+		GetModuleHandle(NULL),
+		NULL);
 
 	HMENU hMenu = CreateMenu();
 
@@ -745,8 +741,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	
 	// Move
 	hSubMenu = CreatePopupMenu();
-	AppendMenu(hSubMenu, MF_STRING, ID_MOVE_X, L"MoveX");
-	AppendMenu(hSubMenu, MF_STRING, ID_MOVE_Y, L"MoveY");
+	AppendMenu(hSubMenu, MF_STRING, ID_MOVE_X_LEFT, L"← MoveX");
+	AppendMenu(hSubMenu, MF_STRING, ID_MOVE_X_RIGHT, L"MoveX →");
+	AppendMenu(hSubMenu, MF_STRING, ID_MOVE_Y_UP, L"MoveY ↑");
+	AppendMenu(hSubMenu, MF_STRING, ID_MOVE_Y_DOWN, L"MoveY ↓");
 	AppendMenu(hMenu, MF_STRING | MF_POPUP, (UINT)hSubMenu, L"Move");
 
 	// Move
@@ -801,18 +799,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case IDM_EXIT:
 			DestroyWindow(hWnd);
 			break;
-		case ID_FILE_EXIT:
-
-			while (FALSE) {}
-
+		
+		case ID_MOVE_X_LEFT:
+			MoveX(-offset);
 			break;
-
-		case ID_MOVE_X:
+		case ID_MOVE_X_RIGHT:
 			MoveX(offset);
 			break;
 
-		case ID_MOVE_Y:
+		case IDC_MAIN_BUTTON:
+			Reset();
+			SetFocus(hWnd);
+			break;
+
+		case ID_MOVE_Y_UP:
 			MoveY(offset);
+			break;
+		case ID_MOVE_Y_DOWN:
+			MoveY(-offset);
 			break;
 		case ID_ROTATE_X:
 			if (clickY && clickX)
@@ -934,8 +938,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// Rotate
 		case 'W':
 		case 'w':
-		case 'ц'+1104:
-		case 'Ц' + 1104:
+		case 'ц'+RUSSIAN_MAGIC_OFFSET:
+		case 'Ц' + RUSSIAN_MAGIC_OFFSET:
 			if (clickY && clickX)
 			{
 				RotateX(alpha, clickX, clickY);
@@ -947,8 +951,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		case 'A':
 		case 'a':
-		case 'Ф' + 1104:
-		case 'ф' + 1104:
+		case 'Ф' + RUSSIAN_MAGIC_OFFSET:
+		case 'ф' + RUSSIAN_MAGIC_OFFSET:
 			if (clickY && clickX)
 			{
 				RotateY(-alpha, clickX, clickY);
@@ -960,8 +964,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		case 'S':
 		case 's':
-		case 'Ы' + 1104:
-		case 'ы' + 1104:
+		case 'Ы' + RUSSIAN_MAGIC_OFFSET:
+		case 'ы' + RUSSIAN_MAGIC_OFFSET:
 			if (clickY && clickX)
 			{
 				RotateX(-alpha, clickX, clickY);
@@ -973,8 +977,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		case 'D':
 		case 'd':
-		case 'В' + 1104:
-		case 'в' + 1104:
+		case 'В' + RUSSIAN_MAGIC_OFFSET:
+		case 'в' + RUSSIAN_MAGIC_OFFSET:
 			if (clickY && clickX)
 			{
 				RotateY(alpha, clickX, clickY);
@@ -988,20 +992,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// Reflection
 		case 'X':
 		case 'x':
-		case 'Ч' + 1104:
-		case 'ч' + 1104:
+		case 'Ч' + RUSSIAN_MAGIC_OFFSET:
+		case 'ч' + RUSSIAN_MAGIC_OFFSET:
 			ReflectX();
 			break;
 		case 'Z':
 		case 'z':
-		case 'Я' + 1104:
-		case 'я' + 1104:
+		case 'Я' + RUSSIAN_MAGIC_OFFSET:
+		case 'я' + RUSSIAN_MAGIC_OFFSET:
 			ReflectY();
 			break;
 		case 'C':
 		case 'c':
-		case 'С' + 1104:
-		case 'с' + 1104:
+		case 'С' + RUSSIAN_MAGIC_OFFSET:
+		case 'с' + RUSSIAN_MAGIC_OFFSET:
 			ReflectXY();
 			break;
 
@@ -1017,8 +1021,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// Resetting
 		case 'R':
 		case 'r':
-		case 'К' + 1104:
-		case 'к' + 1104:
+		case 'К' + RUSSIAN_MAGIC_OFFSET:
+		case 'к' + RUSSIAN_MAGIC_OFFSET:
 			Reset();
 			break;
 		default:
@@ -1050,62 +1054,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		break;
 	}
-	/*case ID_BUTTON:
-
-		while (false){}
-		break;
-		*/
 	case WM_TIMER:
 		InvalidateRect(hWnd, NULL, TRUE);
 		UpdateWindow(hWnd);
 		break;
-
-	/*case WM_TIMER: // Make movement
-		a++;
-		if (a < 100)
-		{
-			//RotateX(alpha, center[0], center[1]);
-			ReflectXY();
-		}
-		else if (a < 200)
-		{
-			//RotateX(-alpha, center[0], center[1]);
-		}
-		else if (a < 300)
-		{
-			//RotateY(alpha, center[0], center[1]);
-		}
-		else if (a < 400)
-		{
-			//RotateX(alpha, center[0], center[1]);
-			//RotateY(alpha, center[0], center[1]);
-		}
-		else if (a < 500)
-		{
-			//RotateX(-alpha, center[0], center[1]);
-			//RotateY(-alpha, center[0], center[1]);
-		}
-		else if (a < 600)
-		{
-			//RotateX(-alpha, center[0], center[1]);
-			//RotateY(alpha, center[0], center[1]);
-		}
-		else if (a < 700)
-		{
-			//RotateX(alpha, center[0], center[1]);
-			//RotateY(-alpha, center[0], center[1]);
-		}
-		else
-		{
-			//RotateY(-alpha, center[0], center[1]);
-		}
-		if (a>800) a = 0;
-
-		InvalidateRect(hWnd, NULL, TRUE);//FALSE);
-		UpdateWindow(hWnd);
-		break;*/
-		
-	
 	
 	case WM_ERASEBKGND:
 		break;	
